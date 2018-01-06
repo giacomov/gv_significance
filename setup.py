@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name='gv_significance',
@@ -8,5 +8,7 @@ setup(
     license='BSD-3.0',
     author='Giacomo Vianello',
     author_email='giacomov@stanford.edu',
-    description='Implement the formulae from Vianello (2018)'
+    description='Implement the formulae from Vianello (2018)',
+    install_requires=['scipy >= 0.18',
+                      'numpy']
 )

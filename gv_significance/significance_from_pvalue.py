@@ -16,8 +16,8 @@ def significance_from_pvalue(pvalue):
     """
 
     # Make sure that we can compute this score (i.e., the pvalue is not too small)
-    if not np.all(pvalue <= tiny):
+    if np.any(pvalue <= tiny):
 
-        raise ValueError("One or more pvalues are too small for a significance computation.")
+        raise ArithmeticError("One or more pvalues are too small for a significance computation.")
 
     return -scipy.special.ndtri(pvalue)
