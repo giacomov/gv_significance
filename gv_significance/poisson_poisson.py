@@ -1,14 +1,16 @@
 import numpy as np
-from xlogy import xlogy
+from xlogy import xlogy, xlogyv
 import scipy.optimize
+from z_bi import z_bi_vectorized
+from size_one_or_n import size_one_or_n
 
 
 def _li_and_ma(n_, b_, alpha):
 
     # In order to avoid numerical problem with 0 * log(0), we add a tiny number to n_ and b_, inconsequential
     # for the computation
-    n_ += 1e-15  # type: np.ndarray
-    b_ += 1e-15  # type: np.ndarray
+    n_ += 1E-25  # type: np.ndarray
+    b_ += 1E-25  # type: np.ndarray
 
     # Pre-compute for speed
     n_plus_b = n_ + b_
@@ -34,7 +36,7 @@ def _likelihood_with_sys(o, b, a, s, k, B, M):
     Ba = B * a
     Bak = B * a * k
 
-    res = -Bak - Ba - B - M + xlogy(b, B) - k ** 2 / (2 * s ** 2) + xlogy(o, Bak + Ba + M)
+    res = -Bak - Ba - B - M + xlogyv(b, B) - k ** 2 / (2 * s ** 2) + xlogyv(o, Bak + Ba + M)
 
     return res
 
@@ -68,6 +70,9 @@ def _get_TS_by_numerical_optimization(n_, b_, alpha, sigma):
     return TS
 
 
+_get_TS_by_numerical_optimization_v = np.vectorize(_get_TS_by_numerical_optimization)
+
+
 def significance(n, b, alpha, sigma=0, k=0):
     """
     Returns the significance for detecting n counts when alpha * B are expected.
@@ -89,10 +94,10 @@ def significance(n, b, alpha, sigma=0, k=0):
 
     :param n: observed counts (can be an array)
     :param b: expected background counts (can be an array)
-    :param alpha: ratio of the source observation efficiency and background observation efficiency (must be the same for
-    all items in n and b)
-    :param sigma: standard deviation for the Gaussian case (must be the same for all items in n and b)
-    :param k: maximum fractional systematic uncertainty expected. (must be the same for all items in n and b)
+    :param alpha: ratio of the source observation efficiency and background observation efficiency
+    (either a float, or an array of the same shape of n)
+    :param sigma: standard deviation for the Gaussian case (either a float, or an array of the same shape of n)
+    :param k: maximum fractional systematic uncertainty expected (either a float, or an array of the same shape of n)
     :return: the significance (z score) for the measurement(s)
     """
 
@@ -102,27 +107,53 @@ def significance(n, b, alpha, sigma=0, k=0):
     n_ = np.array(n, dtype=float, ndmin=1)
     b_ = np.array(b, dtype=float, ndmin=1)
 
+    k_ = size_one_or_n(k, n_, "k")
+
+    sigma_ = size_one_or_n(sigma, n_, "sigma")
+
+    alpha_ = size_one_or_n(alpha, n_, "alpha")
+
     # Assign sign depending on whether n_ > b_
 
-    sign = np.where(n_ >= alpha * b_, 1, -1)
+    sign = np.where(n_ >= alpha_ * b_, 1, -1)
 
-    if sigma == 0 and k == 0:
+    # Prepare vector for results
+    res = np.zeros(n_.shape[0], dtype=float)
 
-        # Li & Ma
-        return np.squeeze(sign * _li_and_ma(n_, b_, alpha))
+    # Select elements where we need to apply Li & Ma and apply it
+    idx_lima = (sigma_ == 0) & (k_ == 0)
 
-    if k > 0:
+    res[idx_lima] = _li_and_ma(n_[idx_lima], b_[idx_lima], alpha_[idx_lima])
 
-        # Need to use eq. 7 from Vianello (2018), which is simply Li & Ma with alpha -> alpha * (k+1)
-        return np.squeeze(sign * _li_and_ma(n_, b_, alpha * (k+1)))
+    # Select elements where we need to apply eq. 7 from Vianello (2018),
+    # which is simply Li & Ma with alpha -> alpha * (k+1)
 
-    if sigma > 0:
+    idx_eq7 = (k_ > 0)
+    res[idx_eq7] = _li_and_ma(n_[idx_eq7], b_[idx_eq7], alpha_[idx_eq7] * (k_[idx_eq7] + 1))
 
-        # Need to use eq. 9 from Vianello (2018)
+    # Select elements where we need to apply eq. 9 from Vianello (2018)
+    idx_eq9 = (sigma_ > 0)
 
-        # The computation is not vectorized because there is an optimization involved, so we can only loop...
-        TS = np.array([_get_TS_by_numerical_optimization(n_[i], b_[i], alpha, sigma) for i in range(n_.shape[0])])
+    if np.any(idx_eq9):
 
-        # Return significance
+        TS = _get_TS_by_numerical_optimization_v(n_[idx_eq9], b_[idx_eq9], alpha_[idx_eq9], sigma_[idx_eq9])
 
-        return np.squeeze(sign * np.sqrt(TS))
+        res[idx_eq9] = np.sqrt(TS)
+
+    # Return significance
+
+    return np.squeeze(sign * res)
+
+
+def z_bi_significance(n, b, alpha):
+    """
+    Use the estimator Z_Bi from Cousins et al. 2008 to compute the significance
+
+    :param n: observed counts (can be an array)
+    :param b: expected background counts (can be an array)
+    :param alpha: ratio of the source observation efficiency and background observation efficiency (must be the same for
+    all items in n and b)
+    :return: the significance (z score) for the measurement(s)
+    """
+
+    return z_bi_vectorized(n, b, alpha)

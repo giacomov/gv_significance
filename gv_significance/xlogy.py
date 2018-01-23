@@ -1,6 +1,7 @@
 from math import log
 import numpy as np
 
+
 def xlogy(x, y):
     """
     This function implements x * log(y) so that if both x and y are 0, the results is zero (and not infinite or nan
@@ -33,6 +34,6 @@ def xlogyv(x, y):
 
     idx = (x != 0)
 
-    results[idx] = x[idx] * log(y[idx])
+    results[idx] = x[idx] * np.log(y[idx])
 
     return np.squeeze(results)

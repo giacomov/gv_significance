@@ -20,4 +20,6 @@ def significance_from_pvalue(pvalue):
 
         raise ArithmeticError("One or more pvalues are too small for a significance computation.")
 
+    # This is equivalent to sqrt(2) * erfinv(1 - 2 * pvalue) but faster
+
     return -scipy.special.ndtri(pvalue)

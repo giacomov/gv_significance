@@ -10,5 +10,7 @@ setup(
     author_email='giacomov@stanford.edu',
     description='Implement the formulae from Vianello (2018)',
     install_requires=['scipy >= 0.18',
-                      'numpy']
+                      'numpy',
+                      'ncephes',
+                      'numba']
 )
